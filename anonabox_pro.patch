@@ -1,0 +1,223 @@
+diff --git a/target/linux/ar71xx/base-files/lib/ar71xx.sh b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+index 3203273..c8297b2 100755
+--- a/target/linux/ar71xx/base-files/lib/ar71xx.sh
++++ b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+@@ -390,6 +390,9 @@ ar71xx_board_detect() {
+ 	*"AP143 reference board")
+ 		name="ap143"
+ 		;;
++	*"ANONABOX_PRO")
++		name="anonabox-pro"
++		;;
+ 	*"AP147-010 reference board")
+ 		name="ap147-010"
+ 		;;
+diff --git a/target/linux/ar71xx/files/arch/mips/ath79/mach-anonabox-pro.c b/target/linux/ar71xx/files/arch/mips/ath79/mach-anonabox-pro.c
+new file mode 100644
+index 0000000..d97c92f
+--- /dev/null
++++ b/target/linux/ar71xx/files/arch/mips/ath79/mach-anonabox-pro.c
+@@ -0,0 +1,111 @@
++/*
++ * Atheros ANONABOX_PRO reference board support
++ *
++ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
++ * Copyright (c) 2012 Gabor Juhos <juhosg@openwrt.org>
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ *
++ */
++
++#include <linux/platform_device.h>
++#include <linux/ath9k_platform.h>
++#include <linux/ar8216_platform.h>
++
++#include <asm/mach-ath79/ar71xx_regs.h>
++
++#include "common.h"
++#include "dev-eth.h"
++#include "dev-gpio-buttons.h"
++#include "dev-leds-gpio.h"
++#include "dev-m25p80.h"
++#include "dev-spi.h"
++#include "dev-usb.h"
++#include "dev-wmac.h"
++#include "machtypes.h"
++
++#define ANONABOX_PRO_GPIO_LED_STATUS              14
++
++#define ANONABOX_PRO_GPIO_BTN_RST                 17
++
++#define ANONABOX_PRO_KEYS_POLL_INTERVAL           20	/* msecs */
++#define ANONABOX_PRO_KEYS_DEBOUNCE_INTERVAL       (3 * ANONABOX_PRO_KEYS_POLL_INTERVAL)
++
++#define ANONABOX_PRO_MAC0_OFFSET                  0
++#define ANONABOX_PRO_MAC1_OFFSET                  6
++#define ANONABOX_PRO_WMAC_CALDATA_OFFSET          0x1000
++
++static struct gpio_led anonabox_pro_leds_gpio[] __initdata = {
++	{
++		.name		= "anonabox_pro:green:status",
++		.gpio		= ANONABOX_PRO_GPIO_LED_STATUS,
++		.active_low	= 1,
++	},
++};
++
++static struct gpio_keys_button anonabox_pro_gpio_keys[] __initdata = {
++	{
++		.desc		= "reset button",
++		.type		= EV_KEY,
++		.code		= KEY_RESTART,
++		.debounce_interval = ANONABOX_PRO_KEYS_DEBOUNCE_INTERVAL,
++		.gpio		= ANONABOX_PRO_GPIO_BTN_RST,
++		.active_low	= 1,
++	},
++};
++
++static void __init anonabox_pro_gpio_led_setup(void)
++{
++	ath79_register_leds_gpio(-1, ARRAY_SIZE(anonabox_pro_leds_gpio),
++			anonabox_pro_leds_gpio);
++	ath79_register_gpio_keys_polled(-1, ANONABOX_PRO_KEYS_POLL_INTERVAL,
++			ARRAY_SIZE(anonabox_pro_gpio_keys),
++			anonabox_pro_gpio_keys);
++}
++
++static void __init anonabox_pro_setup(void)
++{
++	u8 *art = (u8 *) KSEG1ADDR(0x1fff0000);
++
++	ath79_register_m25p80(NULL);
++
++	anonabox_pro_gpio_led_setup();
++
++	ath79_register_usb();
++
++	ath79_register_wmac(art + ANONABOX_PRO_WMAC_CALDATA_OFFSET, NULL);
++
++	ath79_register_mdio(0, 0x0);
++	ath79_register_mdio(1, 0x0);
++
++	ath79_init_mac(ath79_eth0_data.mac_addr, art + ANONABOX_PRO_MAC0_OFFSET, 0);
++	ath79_init_mac(ath79_eth1_data.mac_addr, art + ANONABOX_PRO_MAC1_OFFSET, 0);
++
++	/* WAN port */
++	ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
++	ath79_eth0_data.speed = SPEED_100;
++	ath79_eth0_data.duplex = DUPLEX_FULL;
++	ath79_eth0_data.phy_mask = BIT(4);
++	ath79_register_eth(0);
++
++	/* LAN ports */
++	ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_GMII;
++	ath79_eth1_data.speed = SPEED_1000;
++	ath79_eth1_data.duplex = DUPLEX_FULL;
++	ath79_switch_data.phy_poll_mask |= BIT(4);
++	ath79_switch_data.phy4_mii_en = 1;
++	ath79_register_eth(1);
++}
++
++MIPS_MACHINE(ATH79_MACH_ANONABOX_PRO, "ANONABOX_PRO", "Anonabox Pro board",
++	     anonabox_pro_setup);
+diff --git a/target/linux/ar71xx/generic/profiles/atheros.mk b/target/linux/ar71xx/generic/profiles/atheros.mk
+index 3a312a4..f95fd7a 100644
+--- a/target/linux/ar71xx/generic/profiles/atheros.mk
++++ b/target/linux/ar71xx/generic/profiles/atheros.mk
+@@ -182,3 +182,15 @@ define Profile/PB92/Description
+ endef
+ 
+ $(eval $(call Profile,PB92))
++
++define Profile/ANONABOX_PRO
++	NAME:=Anonabox Pro
++	PACKAGES:=kmod-usb-core kmod-usb2 kmod-usb-storage
++endef
++
++define Profile/ANONABOX_PRO/Description
++	Package set optimized for the Anonabox Pro.
++endef
++
++$(eval $(call Profile,ANONABOX_PRO))
++
+diff --git a/target/linux/ar71xx/image/Makefile b/target/linux/ar71xx/image/Makefile
+index cb11104..d8ca1c9 100644
+--- a/target/linux/ar71xx/image/Makefile
++++ b/target/linux/ar71xx/image/Makefile
+@@ -1549,6 +1549,7 @@ ap135_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14528k(rootfs),
+ ap136_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,6336k(rootfs),1408k(kernel),64k(mib0),64k(art)ro,7744k@0x50000(firmware)
+ ap143_mtdlayout_8M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,6336k(rootfs),1472k(kernel),64k(art)ro,7744k@0x50000(firmware)
+ ap143_mtdlayout_16M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14528k(rootfs),1472k(kernel),64k(art)ro,16000k@0x50000(firmware)
++anonabox_pro_mtdlayout_16M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14528k(rootfs),1472k(kernel),64k(art)ro,16000k@0x50000(firmware)
+ ap147_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14528k(rootfs),1472k(kernel),64k(art),16000k@0x50000(firmware)
+ ap152_mtdlayout_16M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14528k(rootfs),1472k(kernel),64k(art)ro,16000k@0x50000(firmware)
+ bxu2000n2_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,1408k(kernel),8448k(rootfs),6016k(user),64k(cfg),64k(oem),64k(art)ro
+@@ -2369,6 +2370,7 @@ $(eval $(call SingleProfile,AthLzma,64k,AP136_010,ap136-010,AP136-010,ttyS0,1152
+ $(eval $(call SingleProfile,AthLzma,64k,AP136_020,ap136-020,AP136-020,ttyS0,115200,$$(ap136_mtdlayout),RKuImage))
+ $(eval $(call SingleProfile,AthLzma,64k,AP143_8M,ap143-8M,AP143,ttyS0,115200,$$(ap143_mtdlayout_8M),RKuImage))
+ $(eval $(call SingleProfile,AthLzma,64k,AP143_16M,ap143-16M,AP143,ttyS0,115200,$$(ap143_mtdlayout_16M),RKuImage))
++$(eval $(call SingleProfile,AthLzma,64k,ANONABOX_PRO,anonabox-pro-16M,ANONABOX_PRO,ttyS0,115200,$$(anonabox_pro_mtdlayout_16M),RKuImage))
+ $(eval $(call SingleProfile,AthLzma,64k,AP147_010,ap147-010,AP147-010,ttyS0,115200,$$(ap147_mtdlayout),RKuImage))
+ $(eval $(call SingleProfile,AthLzma,64k,AP152_16M,ap152-16M,AP152,ttyS0,115200,$$(ap152_mtdlayout_16M),RKuImage))
+ $(eval $(call SingleProfile,AthLzma,64k,BXU2000N2,bxu2000n-2-a1,BXU2000n-2-A1,ttyS0,115200,$$(bxu2000n2_mtdlayout),RKuImage))
+diff --git a/target/linux/ar71xx/patches-4.1/911-MIPS-ath79-add-anonabox-pro-support.patch b/target/linux/ar71xx/patches-4.1/911-MIPS-ath79-add-anonabox-pro-support.patch
+new file mode 100644
+index 0000000..5a015a2
+--- /dev/null
++++ b/target/linux/ar71xx/patches-4.1/911-MIPS-ath79-add-anonabox-pro-support.patch
+@@ -0,0 +1,46 @@
++Index: linux-4.1.16/arch/mips/ath79/Kconfig
++===================================================================
++--- linux-4.1.16.orig/arch/mips/ath79/Kconfig
+++++ linux-4.1.16/arch/mips/ath79/Kconfig
++@@ -83,6 +83,20 @@ config ATH79_MACH_UBNT_XM
++ 	  Say 'Y' here if you want your kernel to support the
++ 	  Ubiquiti Networks XM (rev 1.0) board.
++ 
+++config ATH79_MACH_ANONABOX_PRO
+++	bool "Anonabox Pro board"
+++        select SOC_QCA953X
+++        select ATH79_DEV_GPIO_BUTTONS
+++        select ATH79_DEV_LEDS_GPIO
+++        select ATH79_DEV_SPI
+++        select ATH79_DEV_USB
+++        select ATH79_DEV_WMAC
+++        select ATH79_DEV_ETH
+++        select ATH79_DEV_M25P80
+++        help
+++          Say 'Y' here if you want your kernel to support the
+++          Anonabox Pro board.
+++
++ source "arch/mips/ath79/Kconfig.openwrt"
++ 
++ endmenu
++Index: linux-4.1.16/arch/mips/ath79/Makefile
++===================================================================
++--- linux-4.1.16.orig/arch/mips/ath79/Makefile
+++++ linux-4.1.16/arch/mips/ath79/Makefile
++@@ -193,3 +193,4 @@ obj-$(CONFIG_ATH79_MACH_WZR_450HP2)	+= m
++ obj-$(CONFIG_ATH79_MACH_ZCN_1523H)	+= mach-zcn-1523h.o
++ obj-$(CONFIG_ATH79_MACH_CARAMBOLA2)	+= mach-carambola2.o
++ obj-$(CONFIG_ATH79_MACH_NBG6716)	+= mach-nbg6716.o
+++obj-$(CONFIG_ATH79_MACH_ANONABOX_PRO)	+= mach-anonabox-pro.o
++Index: linux-4.1.16/arch/mips/ath79/machtypes.h
++===================================================================
++--- linux-4.1.16.orig/arch/mips/ath79/machtypes.h
+++++ linux-4.1.16/arch/mips/ath79/machtypes.h
++@@ -246,6 +246,7 @@ enum ath79_mach_type {
++ 	ATH79_MACH_WZR_450HP2,		/* Buffalo WZR-450HP2 */
++ 	ATH79_MACH_ZCN_1523H_2,		/* Zcomax ZCN-1523H-2-xx */
++ 	ATH79_MACH_ZCN_1523H_5,		/* Zcomax ZCN-1523H-5-xx */
+++	ATH79_MACH_ANONABOX_PRO,	/* Anonabox Pro */
++ };
++ 
++ #endif /* _ATH79_MACHTYPE_H */
